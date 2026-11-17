@@ -1,10 +1,22 @@
-from datetime import timezone
-from app.modules.m2_airports.registry import airport_zone
+from datetime import datetime, timezone
+from app.modules.m2_airports import registry
 from app.modules.m3_localtime.resolve import resolve_local
 
+def _leg_date(local_value: str) -> str:
+    return datetime.fromisoformat(local_value).date().isoformat()
+
 def build_leg(row: dict) -> dict:
-    departure = resolve_local(row["departure_local"], airport_zone(row["origin"]), row.get("departure_fold"))
-    arrival = resolve_local(row["arrival_local"], airport_zone(row["destination"]), row.get("arrival_fold"))
+    # 时区来源按航段自身的本地日期解析，使按机场+日期限定的应急接管能即时作用于查询
+    departure = resolve_local(
+        row["departure_local"],
+        registry.airport_zone(row["origin"], _leg_date(row["departure_local"])),
+        row.get("departure_fold"),
+    )
+    arrival = resolve_local(
+        row["arrival_local"],
+        registry.airport_zone(row["destination"], _leg_date(row["arrival_local"])),
+        row.get("arrival_fold"),
+    )
     dep_utc = departure.astimezone(timezone.utc); arr_utc = arrival.astimezone(timezone.utc)
     minutes = int((arr_utc - dep_utc).total_seconds() // 60)
     if minutes <= 0 or minutes > 18 * 60:
